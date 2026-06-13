@@ -1,0 +1,93 @@
+name: UWHPC Evaluation
+
+# Submits this repo + commit to the UWHPC evaluator service and reports the
+# result as a commit check. Configure once in repo settings:
+#   - secret   UWHPC_EVALUATOR_TOKEN  (shared bearer token)
+#   - variable UWHPC_EVALUATOR_URL    (service base URL, e.g. https://eval.uwhpc.ca)
+
+on:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit to evaluator and poll for result
+        env:
+          BASE_URL: ${{ vars.UWHPC_EVALUATOR_URL }}
+          TOKEN: ${{ secrets.UWHPC_EVALUATOR_TOKEN }}
+          # Passed via env (not inlined into the script) to avoid expression injection.
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${BASE_URL:-}" ]; then
+            echo "::error::UWHPC_EVALUATOR_URL repository variable is not set"
+            exit 1
+          fi
+          if [ -z "${TOKEN:-}" ]; then
+            echo "::error::UWHPC_EVALUATOR_TOKEN repository secret is not set"
+            exit 1
+          fi
+          base="${BASE_URL%/}"
+
+          # 1. Submit
+          body=$(jq -n \
+            --arg repo "https://github.com/${REPO}" \
+            --arg sha "${SHA}" \
+            --arg actor "${ACTOR}" \
+            --arg run "${RUN_ID}" \
+            '{repo_url: $repo, commit_sha: $sha, github_actor: $actor, github_run_id: $run}')
+
+          submit=$(curl -sS -X POST "${base}/v1/evaluations" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$body")
+
+          job_id=$(printf '%s' "$submit" | jq -r '.job_id // empty' 2>/dev/null || true)
+          if [ -z "$job_id" ]; then
+            echo "::error::submission failed: $submit"
+            exit 1
+          fi
+          echo "Submitted evaluation job: $job_id"
+
+          # 2. Poll until terminal (5s x 144 = 12 min, just over the 10-min job timeout)
+          status="unknown"
+          result="{}"
+          for _ in $(seq 1 144); do
+            result=$(curl -sS "${base}/v1/evaluations/${job_id}/results" \
+              -H "Authorization: Bearer ${TOKEN}" || echo '{}')
+            status=$(printf '%s' "$result" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
+            case "$status" in
+              completed|failed_build|failed_tests|failed_benchmark|timed_out|internal_error)
+                break ;;
+            esac
+            sleep 5
+          done
+
+          # 3. Summarize
+          {
+            echo "## UWHPC Evaluation — \`${status}\`"
+            echo ""
+            echo "Job: \`${job_id}\`"
+            echo ""
+            echo '```json'
+            printf '%s\n' "$result" | jq . 2>/dev/null || printf '%s\n' "$result"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$result" | jq . 2>/dev/null || printf '%s\n' "$result"
+
+          # 4. Pass only when the evaluation completed cleanly
+          if [ "$status" != "completed" ]; then
+            echo "::error::evaluation did not pass (status: ${status})"
+            exit 1
+          fi
+          echo "Evaluation passed."
