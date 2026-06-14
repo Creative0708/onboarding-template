@@ -1,66 +1,32 @@
 #include "grid.hpp"
-#include <iostream>
-#include <chrono>
 
-void apply_stencil(Grid& new_grid, const Grid& old_grid) {
-    auto& new_cell{new_grid.cell()};
-    const auto& old_cell{old_grid.cell()};
+// Apply the five-point stencil over all interior points, copying the boundary
+// values unchanged from old_grid to new_grid.
+//
+// This naive version is correct but unoptimized -- improving it (together with
+// the Grid memory layout in grid.hpp) is the exercise.
+void apply_stencil(const Grid& old_grid, Grid& new_grid) {
+    const std::size_t Nx = old_grid.Nx();
+    const std::size_t Ny = old_grid.Ny();
 
-    // Copy boundaries
-    for (std::size_t i{}; i < old_grid.Nx(); ++i) {
-        new_cell[i][0] = old_cell[i][0];
-        new_cell[i][old_grid.Ny() - 1] = old_cell[i][old_grid.Ny() - 1];
+    // Copy boundaries.
+    for (std::size_t i = 0; i < Nx; ++i) {
+        new_grid(i, 0) = old_grid(i, 0);
+        new_grid(i, Ny - 1) = old_grid(i, Ny - 1);
+    }
+    for (std::size_t j = 0; j < Ny; ++j) {
+        new_grid(0, j) = old_grid(0, j);
+        new_grid(Nx - 1, j) = old_grid(Nx - 1, j);
     }
 
-    for (std::size_t j{}; j < old_grid.Ny(); ++j) {
-        new_cell[0][j] = old_cell[0][j];
-        new_cell[old_grid.Nx() - 1][j] = old_cell[old_grid.Nx() - 1][j];
-    }
-
-    for (std::size_t i{1}; i < new_grid.Nx() - 1; ++i) {
-        for (std::size_t j{1}; j < new_grid.Ny() - 1; ++j) {
-            new_cell[i][j] = 0.5 * old_cell[i][j] + 
-                             0.125 * (
-                                      old_cell[i-1][j] +
-                                      old_cell[i+1][j] +
-                                      old_cell[i][j-1] +
-                                      old_cell[i][j+1]
-                                     );
+    // Interior update.
+    for (std::size_t i = 1; i < Nx - 1; ++i) {
+        for (std::size_t j = 1; j < Ny - 1; ++j) {
+            new_grid(i, j) = 0.5 * old_grid(i, j) +
+                             0.125 * (old_grid(i - 1, j) +
+                                      old_grid(i + 1, j) +
+                                      old_grid(i, j - 1) +
+                                      old_grid(i, j + 1));
         }
     }
-}
-
-int main() {
-    // Grid Size:
-    std::size_t Nx{1024}, Ny{1024};
-    std::cout << "Enter X cells: ";
-    std::cin >> Nx; std::cout << std::endl;
-    std::cout << "Enter Y cells: ";
-    std::cin >> Ny; std::cout << std::endl;
-
-    // Initialize grids:
-    Grid old_grid{Nx, Ny};
-    Grid new_grid{Nx, Ny};
-
-    // Run for steps:
-    std::size_t num_steps{1000};
-    std::cout << "Enter total steps: ";
-    std::cin >> num_steps; std::cout << "\n";
-
-    // Time loop:
-    auto start{std::chrono::high_resolution_clock::now()};
-
-    // Loop update:
-    for (std::size_t t{}; t < num_steps; ++t) {
-        apply_stencil(new_grid, old_grid);
-    }
-
-    // Calculate total time:
-    auto end{std::chrono::high_resolution_clock::now()};
-    double ms{std::chrono::duration<double, std::milli>(end - start).count()};
-
-    // Output total time:
-    std::cout << "Time elapsed: " << ms << " ms" << std::endl;
-
-    return 0;
 }

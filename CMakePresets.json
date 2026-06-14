@@ -1,0 +1,25 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "benchmark",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/benchmark",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_FLAGS_RELEASE": "-O3"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "benchmark", "configurePreset": "benchmark" }
+  ],
+  "testPresets": [
+    {
+      "name": "benchmark",
+      "configurePreset": "benchmark",
+      "output": { "outputOnFailure": true }
+    }
+  ]
+}
