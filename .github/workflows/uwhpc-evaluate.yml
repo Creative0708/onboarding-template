@@ -15,7 +15,9 @@ permissions:
 
 jobs:
   evaluate:
-    runs-on: ubuntu-latest
+    # Self-hosted runner inside WATcloud, so it can reach the internal evaluator.
+    # These labels must match the runner you register (org Settings -> Actions -> Runners).
+    runs-on: [self-hosted, uwhpc]
     steps:
       - name: Submit to evaluator and poll for result
         env:

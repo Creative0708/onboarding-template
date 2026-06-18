@@ -1,0 +1,5 @@
+# Declares the custom self-hosted runner labels used by this repo's workflows,
+# so actionlint doesn't flag them as unknown.
+self-hosted-runner:
+  labels:
+    - uwhpc
