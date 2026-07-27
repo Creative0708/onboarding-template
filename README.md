@@ -37,7 +37,7 @@ ctest --preset benchmark --output-on-failure    # correctness test
 The benchmark prints one line of JSON:
 
 ```json
-{"runtime_ms": 97.882, "memory_mb": 16.777, "score": 0.758}
+{ "runtime_ms": 97.882, "memory_mb": 16.777, "score": 0.758 }
 ```
 
 `score` is the harness's reference time divided by your time — higher is faster.
@@ -47,5 +47,5 @@ layout and the kernel is the point.
 ## Submission
 
 Push your changes. A GitHub Action runs your code through the UWHPC evaluator
-and reports the result as a commit check. We'll then invite you to a short
+and reports the result as a GitHub Action check. We'll then invite you to a short
 virtual chat to discuss your design.
