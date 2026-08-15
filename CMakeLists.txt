@@ -8,8 +8,7 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
-# uwhpc_benchmark = fixed harness (bench/main.cpp) + applicant kernel (src/stencil.cpp).
-add_executable(uwhpc_benchmark bench/main.cpp src/stencil.cpp)
+add_executable(uwhpc_benchmark bench/main.cpp)
 target_include_directories(uwhpc_benchmark PRIVATE src)
 
 enable_testing()

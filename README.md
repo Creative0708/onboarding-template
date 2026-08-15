@@ -1,29 +1,20 @@
 # UWHPC Onboarding — 2D Heat Diffusion
 
-Implement a fast 2D heat-diffusion stencil. The full problem statement is in
-[`docs/UWHPC_Onboarding.pdf`](docs/UWHPC_Onboarding.pdf).
+Starter repository for the UWHPC onboarding problem.
 
-## What you implement
+**The problem statement lives here: [UWHPC Onboarding](https://REPLACE-ME/onboarding).** Read it first.
+This file only covers building and submitting.
 
-Edit only these two files:
+## What you edit
 
-- [`src/grid.hpp`](src/grid.hpp) — the `Grid` class (you choose the memory layout)
-- [`src/stencil.cpp`](src/stencil.cpp) — the `apply_stencil` function
+One file: [`src/submission.hpp`](src/submission.hpp). Both the `Grid` class and
+the `apply_stencil` function go there, and the interface your `Grid` has to
+provide is documented at the top of that file.
 
-Your `Grid` must keep this interface — the harness uses it to read and write cells:
+Everything else (`bench/`, `CMakeLists.txt`, `CMakePresets.json`, etc) is the
+evaluation harness. **Don't edit it.**
 
-```cpp
-Grid(std::size_t nx, std::size_t ny);
-std::size_t Nx() const;
-std::size_t Ny() const;
-double& operator()(std::size_t i, std::size_t j);       // read/write
-double  operator()(std::size_t i, std::size_t j) const; // read
-```
-
-Everything else — `bench/`, `CMakeLists.txt`, `CMakePresets.json` — is the
-provided evaluation harness. **Don't edit it.**
-
-## Build & run locally
+## Build & run
 
 Requires CMake ≥ 3.21, Ninja, and a C++17 compiler.
 
@@ -34,18 +25,23 @@ ctest --preset benchmark --output-on-failure    # correctness test
 ./build/benchmark/uwhpc_benchmark               # run the benchmark
 ```
 
-The benchmark prints one line of JSON:
+`--check` runs three public correctness cases. The evaluator runs those plus
+private cases you can't see here, so passing locally is necessary but not
+sufficient.
+
+The benchmark prints one line of JSON, where `score` is the harness's reference
+time divided by yours:
 
 ```json
-{ "runtime_ms": 97.882, "memory_mb": 16.777, "score": 0.758 }
+{ "runtime_ms": 148.404, "memory_mb": 16.777, "score": 1.293 }
 ```
 
-`score` is the harness's reference time divided by your time — higher is faster.
-The starter (`vector<vector<double>>`) scores below 1.0; improving the memory
-layout and the kernel is the point.
+Use the commands above rather than an IDE's own CMake integration. Those default
+to a Debug build, which will cost you most of your score. See the
+[problem statement](https://REPLACE-ME/onboarding) for what the number means.
 
-## Submission
+## Submitting
 
 Push your changes. A GitHub Action runs your code through the UWHPC evaluator
-and reports the result as a GitHub Action check. We'll then invite you to a short
+and reports the result as a commit check. We'll then invite you to a short
 virtual chat to discuss your design.
