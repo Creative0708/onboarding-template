@@ -2,7 +2,7 @@
 
 Starter repository for the UWHPC onboarding problem.
 
-**The problem statement lives here: [UWHPC Onboarding](https://REPLACE-ME/onboarding).** Read it first.
+**The problem statement lives here: [UWHPC Onboarding](https://docs.uwhpc.com/onboarding/problem-statement/).** Read it first.
 This file only covers building and submitting.
 
 ## What you edit
@@ -38,7 +38,7 @@ time divided by yours:
 
 Use the commands above rather than an IDE's own CMake integration. Those default
 to a Debug build, which will cost you most of your score. See the
-[problem statement](https://REPLACE-ME/onboarding) for what the number means.
+[problem statement](https://docs.uwhpc.com/onboarding/problem-statement/) for what the number means.
 
 ## Submitting
 
