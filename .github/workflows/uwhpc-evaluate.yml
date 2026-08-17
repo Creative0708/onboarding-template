@@ -70,25 +70,38 @@ jobs:
             sleep 5
           done
 
-          # 3. Compose the sticky comment body
+          # 3. Extract fields and build a clean report
+          build=$(printf '%s' "$result" | jq -r '.build.status // "n/a"')
+          vis=$(printf '%s'   "$result" | jq -r '.tests.visible // "n/a"')
+          hid=$(printf '%s'   "$result" | jq -r '.tests.hidden // "n/a"')
+          rt=$(printf '%s'    "$result" | jq -r '.benchmark.runtime_ms // "n/a"')
+          mem=$(printf '%s'   "$result" | jq -r '.benchmark.memory_mb // "n/a"')
           score=$(printf '%s' "$result" | jq -r '.benchmark.score // "n/a"')
           pretty=$(printf '%s' "$result" | jq . 2>/dev/null || printf '%s' "$result")
-          comment=$(jq -n --arg m "$marker" --arg s "$status" --arg j "$job_id" --arg sc "$score" --arg r "$pretty" \
-            '{body: ($m + "\n## UWHPC Evaluation — `" + $s + "`\n\nJob: `" + $j + "` · Score: `" + $sc +
-                     "`\n\n<details><summary>Full result</summary>\n\n```json\n" + $r + "\n```\n</details>")}')
+          now=$(date -u +"%Y-%m-%d %H:%M UTC")
+          unit() { if [ "$1" = "n/a" ]; then printf 'n/a'; else printf '%s %s' "$1" "$2"; fi; }
+          rt_s=$(unit "$rt" "ms"); mem_s=$(unit "$mem" "MB")
+
+          report=$(printf '## UWHPC Evaluation\n\n**Status:** %s\n\n| Stage | Result |\n| --- | --- |\n| Build | %s |\n| Public tests | %s |\n| Hidden tests | %s |\n| Runtime | %s |\n| Memory | %s |\n| Score | %s |\n\n<sub>Job `%s` · updated %s</sub>\n' \
+            "$status" "$build" "$vis" "$hid" "$rt_s" "$mem_s" "$score" "$job_id" "$now")
+          details=$(printf '\n<details><summary>Raw result</summary>\n\n```json\n%s\n```\n</details>\n' "$pretty")
 
           # 4. Sticky comment: update ours if present, else create
+          payload=$(jq -n --arg b "$(printf '%s\n%s\n%s' "$marker" "$report" "$details")" '{body:$b}')
           cid=$(curl -sS "${api}/issues/${PR_NUMBER}/comments?per_page=100" \
                   -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
-                | jq -r --arg m "$marker" '[.[] | select(.body | contains($m))][0].id // empty')
+                | jq -r --arg m "$marker" '[.[] | select(.body | contains($m))][0].id // empty' || echo '')
           if [ -n "$cid" ]; then
             curl -sS -X PATCH "${api}/issues/comments/${cid}" \
-              -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -d "$comment" >/dev/null
+              -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -d "$payload" >/dev/null
           else
             curl -sS -X POST "${api}/issues/${PR_NUMBER}/comments" \
-              -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -d "$comment" >/dev/null
+              -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -d "$payload" >/dev/null
           fi
 
-          # 5. Reflect pass/fail as the check status (PR stays open for iteration)
+          # 5. Mirror the report to the run's Summary tab
+          printf '%s\n%s\n' "$report" "$details" >> "$GITHUB_STEP_SUMMARY"
+
+          # 6. Reflect pass/fail as the check status (PR stays open for iteration)
           [ "$status" = "completed" ] || { echo "::error::status=${status}"; exit 1; }
           echo "Evaluation passed."
