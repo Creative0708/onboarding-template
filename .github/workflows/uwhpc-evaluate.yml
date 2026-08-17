@@ -1,95 +1,94 @@
 name: UWHPC Evaluation
 
-# Submits this repo + commit to the UWHPC evaluator service and reports the
-# result as a commit check. Configure once in repo settings:
-#   - secret   UWHPC_EVALUATOR_TOKEN  (shared bearer token)
-#   - variable UWHPC_EVALUATOR_URL    (service base URL, e.g. https://eval.uwhpc.ca)
+# Applicant submissions arrive as PRs from forks. This runs the TRUSTED
+# base-branch workflow (pull_request_target); it forwards only the PR's fork URL
+# + head SHA to the evaluator and reports the result as a sticky PR comment. It
+# NEVER checks out or runs the PR's code on the runner — the untrusted build runs
+# only in the evaluator's sandbox. Submission PRs are made drafts (unmergeable)
+# but left open for iterative improvement.
 
 on:
-  push:
-    branches: ["**"]
-  workflow_dispatch:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
+  pull-requests: write
+
+concurrency:
+  group: eval-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
   evaluate:
-    # Self-hosted runner inside WATcloud, so it can reach the internal evaluator.
-    # These labels must match the runner you register (org Settings -> Actions -> Runners).
+    # Only real submissions (fork PRs); internal maintenance PRs are skipped.
+    if: ${{ github.event.pull_request.head.repo.fork }}
     runs-on: [self-hosted, uwhpc]
     steps:
-      - name: Submit to evaluator and poll for result
+      - name: Evaluate submission and report on the PR
         env:
           BASE_URL: ${{ vars.UWHPC_EVALUATOR_URL }}
           TOKEN: ${{ secrets.UWHPC_EVALUATOR_TOKEN }}
-          # Passed via env (not inlined into the script) to avoid expression injection.
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.sha }}
-          ACTOR: ${{ github.actor }}
+          GH_TOKEN: ${{ github.token }}
+          FORK_URL: ${{ github.event.pull_request.head.repo.clone_url }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NODE_ID: ${{ github.event.pull_request.node_id }}
+          ACTOR: ${{ github.event.pull_request.user.login }}
           RUN_ID: ${{ github.run_id }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-
-          if [ -z "${BASE_URL:-}" ]; then
-            echo "::error::UWHPC_EVALUATOR_URL repository variable is not set"
-            exit 1
-          fi
-          if [ -z "${TOKEN:-}" ]; then
-            echo "::error::UWHPC_EVALUATOR_TOKEN repository secret is not set"
-            exit 1
-          fi
+          [ -n "${BASE_URL:-}" ] || { echo "::error::UWHPC_EVALUATOR_URL not set"; exit 1; }
+          [ -n "${TOKEN:-}" ]    || { echo "::error::UWHPC_EVALUATOR_TOKEN not set"; exit 1; }
           base="${BASE_URL%/}"
+          api="https://api.github.com/repos/${REPO}"
+          marker="<!-- uwhpc-eval -->"
 
-          # 1. Submit
-          body=$(jq -n \
-            --arg repo "https://github.com/${REPO}" \
-            --arg sha "${SHA}" \
-            --arg actor "${ACTOR}" \
-            --arg run "${RUN_ID}" \
-            '{repo_url: $repo, commit_sha: $sha, github_actor: $actor, github_run_id: $run}')
+          # 0. Make the submission PR a draft so it can't be merged (idempotent).
+          draftq=$(jq -n --arg id "$PR_NODE_ID" \
+            '{query:"mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{isDraft}}}", variables:{id:$id}}')
+          curl -sS -X POST https://api.github.com/graphql \
+            -H "Authorization: Bearer ${GH_TOKEN}" -d "$draftq" >/dev/null || true
 
+          # 1. Submit the fork + head SHA (public fork; evaluator clones it in its sandbox)
+          body=$(jq -n --arg repo "${FORK_URL%.git}" --arg sha "$HEAD_SHA" \
+                       --arg actor "$ACTOR" --arg run "$RUN_ID" \
+                 '{repo_url:$repo, commit_sha:$sha, github_actor:$actor, github_run_id:$run}')
           submit=$(curl -sS -X POST "${base}/v1/evaluations" \
-            -H "Authorization: Bearer ${TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "$body")
+                     -H "Authorization: Bearer ${TOKEN}" -H "Content-Type: application/json" -d "$body")
+          job_id=$(printf '%s' "$submit" | jq -r '.job_id // empty')
+          [ -n "$job_id" ] || { echo "::error::submission failed: $submit"; exit 1; }
+          echo "job: $job_id"
 
-          job_id=$(printf '%s' "$submit" | jq -r '.job_id // empty' 2>/dev/null || true)
-          if [ -z "$job_id" ]; then
-            echo "::error::submission failed: $submit"
-            exit 1
-          fi
-          echo "Submitted evaluation job: $job_id"
-
-          # 2. Poll until terminal (5s x 144 = 12 min, just over the 10-min job timeout)
-          status="unknown"
-          result="{}"
-          for _ in $(seq 1 144); do
-            result=$(curl -sS "${base}/v1/evaluations/${job_id}/results" \
-              -H "Authorization: Bearer ${TOKEN}" || echo '{}')
-            status=$(printf '%s' "$result" | jq -r '.status // "unknown"' 2>/dev/null || echo "unknown")
-            case "$status" in
-              completed|failed_build|failed_tests|failed_benchmark|timed_out|internal_error)
-                break ;;
-            esac
+          # 2. Poll for a terminal result (5s x 180 = 15 min)
+          status="unknown"; result="{}"
+          for _ in $(seq 1 180); do
+            result=$(curl -sS "${base}/v1/evaluations/${job_id}/results" -H "Authorization: Bearer ${TOKEN}" || echo '{}')
+            status=$(printf '%s' "$result" | jq -r '.status // "unknown"')
+            case "$status" in completed|failed_build|failed_tests|failed_benchmark|timed_out|internal_error) break;; esac
             sleep 5
           done
 
-          # 3. Summarize
-          {
-            echo "## UWHPC Evaluation — \`${status}\`"
-            echo ""
-            echo "Job: \`${job_id}\`"
-            echo ""
-            echo '```json'
-            printf '%s\n' "$result" | jq . 2>/dev/null || printf '%s\n' "$result"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          printf '%s\n' "$result" | jq . 2>/dev/null || printf '%s\n' "$result"
+          # 3. Compose the sticky comment body
+          score=$(printf '%s' "$result" | jq -r '.benchmark.score // "n/a"')
+          pretty=$(printf '%s' "$result" | jq . 2>/dev/null || printf '%s' "$result")
+          comment=$(jq -n --arg m "$marker" --arg s "$status" --arg j "$job_id" --arg sc "$score" --arg r "$pretty" \
+            '{body: ($m + "\n## UWHPC Evaluation — `" + $s + "`\n\nJob: `" + $j + "` · Score: `" + $sc +
+                     "`\n\n<details><summary>Full result</summary>\n\n```json\n" + $r + "\n```\n</details>")}')
 
-          # 4. Pass only when the evaluation completed cleanly
-          if [ "$status" != "completed" ]; then
-            echo "::error::evaluation did not pass (status: ${status})"
-            exit 1
+          # 4. Sticky comment: update ours if present, else create
+          cid=$(curl -sS "${api}/issues/${PR_NUMBER}/comments?per_page=100" \
+                  -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+                | jq -r --arg m "$marker" '[.[] | select(.body | contains($m))][0].id // empty')
+          if [ -n "$cid" ]; then
+            curl -sS -X PATCH "${api}/issues/comments/${cid}" \
+              -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -d "$comment" >/dev/null
+          else
+            curl -sS -X POST "${api}/issues/${PR_NUMBER}/comments" \
+              -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -d "$comment" >/dev/null
           fi
+
+          # 5. Reflect pass/fail as the check status (PR stays open for iteration)
+          [ "$status" = "completed" ] || { echo "::error::status=${status}"; exit 1; }
           echo "Evaluation passed."
