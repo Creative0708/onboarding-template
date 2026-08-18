@@ -98,6 +98,14 @@ jobs:
             "$status_block" "$build" "$vis" "$hid" "$rt_s" "$mem_s" "$score" "$job_id" "$now")
           details=$(printf '\n<details><summary>Raw result</summary>\n\n```json\n%s\n```\n</details>\n' "$pretty")
 
+          # On a build failure, show the compiler/build output so the applicant
+          # can fix it (their own code -- safe to reveal).
+          buildlog=$(printf '%s' "$result" | jq -r '.build.log // empty')
+          buildblock=""
+          if [ -n "$buildlog" ]; then
+            buildblock=$(printf '\n<details><summary>Build output</summary>\n\n```\n%s\n```\n</details>\n' "$buildlog")
+          fi
+
           # Per-run benchmark timings (for debugging run-to-run variance).
           runs=$(printf '%s' "$result" | jq -r '
             (.benchmark_runs // empty) as $b
@@ -108,7 +116,7 @@ jobs:
               else "" end' 2>/dev/null || printf '')
 
           # 4. Sticky comment: update ours if present, else create
-          payload=$(jq -n --arg b "$(printf '%s\n%s\n%s\n%s' "$marker" "$report" "$details" "$runs")" '{body:$b}')
+          payload=$(jq -n --arg b "$(printf '%s\n%s\n%s\n%s\n%s' "$marker" "$report" "$buildblock" "$details" "$runs")" '{body:$b}')
           cid=$(curl -sS "${api}/issues/${PR_NUMBER}/comments?per_page=100" \
                   -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
                 | jq -r --arg m "$marker" '[.[] | select(.body | contains($m))][0].id // empty' || echo '')
@@ -121,7 +129,7 @@ jobs:
           fi
 
           # 5. Mirror the report to the run's Summary tab
-          printf '%s\n%s\n%s\n' "$report" "$details" "$runs" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n%s\n%s\n%s\n' "$report" "$buildblock" "$details" "$runs" >> "$GITHUB_STEP_SUMMARY"
 
           # 6. Reflect pass/fail as the check status (PR stays open for iteration)
           [ "$status" = "completed" ] || { echo "::error::status=${status}"; exit 1; }
