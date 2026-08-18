@@ -25,7 +25,7 @@ ctest --preset benchmark --output-on-failure    # correctness test
 ./build/benchmark/uwhpc_benchmark               # run the benchmark
 ```
 
-`--check` runs three public correctness cases. The evaluator runs those plus
+`--check` runs four public correctness cases. The evaluator runs those plus
 private cases you can't see here, so passing locally is necessary but not
 sufficient.
 
@@ -42,6 +42,18 @@ to a Debug build, which will cost you most of your score. See the
 
 ## Submitting
 
-Push your changes. A GitHub Action runs your code through the UWHPC evaluator
-and reports the result as a commit check. We'll then invite you to a short
-virtual chat to discuss your design.
+Submissions are a **pull request from your own fork** — no credentials or
+workflow changes needed.
+
+**Full step-by-step instructions: [How to submit](https://docs.uwhpc.com/onboarding/submit-and-discuss/).**
+
+In short: **fork** this repository, implement your solution in
+`src/submission.hpp`, and open a **pull request** against
+`UWHPC/onboarding-template`. The evaluator runs automatically and posts a result
+comment on your PR with your build, test, and benchmark results. Keep pushing
+commits and re-running until you're happy with your result — the comment updates
+in place.
+
+Once you're satisfied with your submission, join the UWHPC Discord from our
+**[contact page](https://www.uwhpc.com/contact)** and make a post in the
+**onboarding** forum channel with your name and a link to your pull request.
