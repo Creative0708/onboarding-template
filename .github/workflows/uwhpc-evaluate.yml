@@ -79,11 +79,17 @@ jobs:
           score=$(printf '%s' "$result" | jq -r '.benchmark.score // "n/a"')
           pretty=$(printf '%s' "$result" | jq . 2>/dev/null || printf '%s' "$result")
           now=$(date -u +"%Y-%m-%d %H:%M UTC")
+          msg=$(printf '%s' "$result" | jq -r '.error_message // empty')
           unit() { if [ "$1" = "n/a" ]; then printf 'n/a'; else printf '%s %s' "$1" "$2"; fi; }
           rt_s=$(unit "$rt" "ms"); mem_s=$(unit "$mem" "MB")
 
-          report=$(printf '## UWHPC Evaluation\n\n**Status:** %s\n\n| Stage | Result |\n| --- | --- |\n| Build | %s |\n| Public tests | %s |\n| Hidden tests | %s |\n| Runtime | %s |\n| Memory | %s |\n| Score | %s |\n\n<sub>Job `%s` · updated %s</sub>\n' \
-            "$status" "$build" "$vis" "$hid" "$rt_s" "$mem_s" "$score" "$job_id" "$now")
+          # On a failure, show the grader's one-line hint (a coarse category,
+          # never the exact hidden case or how to fix it).
+          hint=""
+          if [ -n "$msg" ] && [ "$status" != "completed" ]; then hint=$(printf '\n> %s\n' "$msg"); fi
+
+          report=$(printf '## UWHPC Evaluation\n\n**Status:** %s\n%s\n| Stage | Result |\n| --- | --- |\n| Build | %s |\n| Public tests | %s |\n| Hidden tests | %s |\n| Runtime | %s |\n| Memory | %s |\n| Score | %s |\n\n<sub>Job `%s` · updated %s</sub>\n' \
+            "$status" "$hint" "$build" "$vis" "$hid" "$rt_s" "$mem_s" "$score" "$job_id" "$now")
           details=$(printf '\n<details><summary>Raw result</summary>\n\n```json\n%s\n```\n</details>\n' "$pretty")
 
           # 4. Sticky comment: update ours if present, else create

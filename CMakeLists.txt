@@ -11,5 +11,14 @@ endif()
 add_executable(uwhpc_benchmark bench/main.cpp)
 target_include_directories(uwhpc_benchmark PRIVATE src)
 
+# OpenMP is optional for local builds (stock macOS Clang, for example, ships
+# without it). The official evaluator builds with OpenMP enabled and
+# -march=x86-64-v3 on x86, so `#pragma omp` code runs multithreaded there even
+# if your local build is serial. Install libomp locally to test parallelism.
+find_package(OpenMP)
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(uwhpc_benchmark PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
 enable_testing()
 add_test(NAME correctness COMMAND uwhpc_benchmark --check)

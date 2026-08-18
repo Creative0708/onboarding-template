@@ -108,9 +108,10 @@ struct CorrectnessCase {
 
 // The public cases. The evaluator runs these plus additional private cases.
 const CorrectnessCase kPublicCases[]{
-  {64,  64,  50,  InitialCondition::kCenterBlock,    "public/square-64"},
-  {96,  128, 100, InitialCondition::kLinearGradient, "public/nonsquare-96x128"},
-  {200, 200, 150, InitialCondition::kCenterBlock,    "public/square-200"},
+  {32, 32, 20, InitialCondition::kCenterBlock,    "public/square-32"},
+  {48, 80, 40, InitialCondition::kLinearGradient, "public/nonsquare-48x80"},
+  {64, 64, 30, InitialCondition::kCheckerboard,   "public/checker-64"},
+  {50, 50, 1,  InitialCondition::kCenterBlock,    "public/one-step-50"},
 };
 
 double max_difference_from_reference(
