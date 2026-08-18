@@ -83,13 +83,19 @@ jobs:
           unit() { if [ "$1" = "n/a" ]; then printf 'n/a'; else printf '%s %s' "$1" "$2"; fi; }
           rt_s=$(unit "$rt" "ms"); mem_s=$(unit "$mem" "MB")
 
-          # On a failure, show the grader's one-line hint (a coarse category,
-          # never the exact hidden case or how to fix it).
-          hint=""
-          if [ -n "$msg" ] && [ "$status" != "completed" ]; then hint=$(printf '\n> %s\n' "$msg"); fi
+          # Status line; on a failure, add the grader's one-line hint as a
+          # blockquote right below it (a coarse category, never the exact hidden
+          # case or how to fix it). The blank lines that separate it from the
+          # table come from the format string below -- $() strips trailing
+          # newlines, so relying on them here would merge the table into the
+          # blockquote.
+          status_block="**Status:** ${status}"
+          if [ -n "$msg" ] && [ "$status" != "completed" ]; then
+            status_block=$(printf '**Status:** %s\n\n> %s' "$status" "$msg")
+          fi
 
-          report=$(printf '## UWHPC Evaluation\n\n**Status:** %s\n%s\n| Stage | Result |\n| --- | --- |\n| Build | %s |\n| Public tests | %s |\n| Hidden tests | %s |\n| Runtime | %s |\n| Memory | %s |\n| Score | %s |\n\n<sub>Job `%s` · updated %s</sub>\n' \
-            "$status" "$hint" "$build" "$vis" "$hid" "$rt_s" "$mem_s" "$score" "$job_id" "$now")
+          report=$(printf '## UWHPC Evaluation\n\n%s\n\n| Stage | Result |\n| --- | --- |\n| Build | %s |\n| Public tests | %s |\n| Hidden tests | %s |\n| Runtime | %s |\n| Memory | %s |\n| Score | %s |\n\n<sub>Job `%s` · updated %s</sub>\n' \
+            "$status_block" "$build" "$vis" "$hid" "$rt_s" "$mem_s" "$score" "$job_id" "$now")
           details=$(printf '\n<details><summary>Raw result</summary>\n\n```json\n%s\n```\n</details>\n' "$pretty")
 
           # Per-run benchmark timings (for debugging run-to-run variance).
