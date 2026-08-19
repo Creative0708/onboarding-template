@@ -2,6 +2,8 @@
 
 Starter repository for the UWHPC onboarding problem.
 
+Begin by completing the Google Form on the onboarding site below:
+
 **The problem statement lives here: [UWHPC Onboarding](https://docs.uwhpc.com/onboarding/problem-statement/).** Read it first.
 This file only covers building and submitting.
 
