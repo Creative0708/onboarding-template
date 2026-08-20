@@ -38,6 +38,11 @@ time divided by yours:
 { "runtime_ms": 148.404, "memory_mb": 16.777, "score": 1.293 }
 ```
 
+Your `score` is measured against a reference **baseline**: a score of `1.0` ties
+the baseline, above `1.0` beats it, and below means you're slower. **You need a
+score over `0.9` to pass** — the evaluator marks any submission below that as a
+failing check.
+
 Use the commands above rather than an IDE's own CMake integration. Those default
 to a Debug build, which will cost you most of your score. See the
 [problem statement](https://docs.uwhpc.com/onboarding/problem-statement/) for what the number means.
