@@ -52,9 +52,7 @@ to a Debug build, which will cost you most of your score. See the
 Submissions are a **pull request from your own fork** — no credentials or
 workflow changes needed.
 
-**Full step-by-step instructions: [How to submit](https://docs.uwhpc.com/onboarding/submit-and-discuss/).**
-
-In short: **fork** this repository, implement your solution in
+**Fork** this repository, implement your solution in
 `src/submission.hpp`, and open a **pull request** against
 `UWHPC/onboarding-template`. The evaluator runs automatically and posts a result
 comment on your PR with your build, test, and benchmark results. Keep pushing
