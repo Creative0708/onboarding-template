@@ -34,18 +34,18 @@ public:
     grid = new __m256d[rows * stride];
   }
 
-  double &operator()(size_t i, size_t j) {
+  inline double &operator()(size_t i, size_t j) {
     if (transposed)
       swap(i, j);
     return ((double *)row(i))[j];
   }
-  double operator()(size_t i, size_t j) const {
+  inline double operator()(size_t i, size_t j) const {
     if (transposed)
       swap(i, j);
     return ((double *)row(i))[j];
   }
 
-  __m256d *row(size_t i) const { return &grid[i * stride]; }
+  inline __m256d *row(size_t i) const { return &grid[i * stride]; }
 };
 
 static inline void apply_stencil_cold(const double *dx, double *dy, size_t j,
@@ -62,16 +62,22 @@ static void apply_stencil(const Grid &x, Grid &y) {
   const auto [rows, cols, stride, _, _2] = x;
   COLIN_ASSERT(rows == y.rows && cols == y.cols && stride == y.stride);
 
-  memcpy(y.row(0), x.row(0), stride * sizeof(__m256d));
-  memcpy(y.row(rows - 1), x.row(rows - 1), stride * sizeof(__m256d));
+  {
+    auto rx0 = x.row(0), ry0 = y.row(0);
+    auto rx1 = x.row(rows - 1), ry1 = y.row(rows - 1);
 
+#pragma omp parallel for
+    for (size_t i = 0; i < stride; i++) {
+      ry0[i] = rx0[i];
+      ry1[i] = rx1[i];
+    }
+  }
   size_t hot_start = N;
   size_t hot_end = (cols - 1) / N * N;
   if (hot_end <= hot_start) {
     // no hot loop iterations; do slow loop only
     hot_start = hot_end = cols - 1;
   }
-
 #pragma omp parallel for
   for (size_t i = 1; i < rows - 1; i++) {
     auto rx = x.row(i), ry = y.row(i);
